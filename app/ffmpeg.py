@@ -185,8 +185,7 @@ class FrameEncoder:
         self.proc.stdin.write(np.ascontiguousarray(frame).tobytes())
 
     def close(self) -> None:
-        if self.proc.stdin:
-            self.proc.stdin.close()
+        # communicate() closes stdin itself; closing it first makes communicate() raise on flush.
         _, err = self.proc.communicate()
         if self.proc.returncode != 0:
             raise FFmpegError("encoder failed: " + err.decode(errors="replace")[-2000:])
