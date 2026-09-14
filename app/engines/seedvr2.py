@@ -15,17 +15,25 @@ from app.ffmpeg import mux_audio, normalize_cfr, probe, target_resolution, valid
 
 # Progress lines printed by inference_cli.py / its ffmpeg writer. Kept tolerant on purpose.
 _WRITTEN_RE = re.compile(r"Written\s+(\d+)\s*/\s*(\d+)\s+frames", re.I)
+_BATCH_RE = re.compile(r"Upscaling batch\s+(\d+)\s*/\s*(\d+)", re.I)   # "[19:43:11] 🎬 Upscaling batch 80/165"
 _CHUNK_RE = re.compile(r"Chunk\s+(\d+)\s*/\s*(\d+)", re.I)
 _PCT_RE = re.compile(r"(\d{1,3})%\|")            # tqdm style "45%|####"
 _FRAC_RE = re.compile(r"\b(\d+)/(\d+)\b")
+_IGNORE = ("EulerSampler",)                      # per-batch one-step sampler bar: always 0% or 100%
 
 
 def parse_progress(line: str) -> Optional[float]:
     """Return a 0..1 fraction if the line carries progress, else None."""
+    if any(tag in line for tag in _IGNORE):
+        return None
     m = _WRITTEN_RE.search(line)
     if m:
         done, total = int(m.group(1)), int(m.group(2))
         return done / total if total > 0 else None
+    m = _BATCH_RE.search(line)
+    if m:
+        idx, total = int(m.group(1)), int(m.group(2))
+        return (idx - 1) / total if total > 0 and idx >= 1 else None
     m = _CHUNK_RE.search(line)
     if m:
         idx, total = int(m.group(1)), int(m.group(2))
@@ -105,7 +113,8 @@ class SeedVR2Engine:
 
         oom = False
         assert proc.stdout is not None
-        for line in proc.stdout:
+        # readline() rather than iterating the pipe: iteration read-aheads in 8 KB blocks and lags live output.
+        for line in iter(proc.stdout.readline, ""):
             line = line.rstrip()
             if not line:
                 continue
