@@ -56,6 +56,10 @@ def test_success_publishes_output(mgr, tmp_path):
     assert job.progress == 1.0
     out = Path(job.output_path)
     assert out.exists() and out.name.startswith("clip_ok_1080p_") and out.read_bytes() == b"video"
+    for _ in range(100):  # work dir is removed just after the state flips to DONE
+        if not job.work_dir.exists():
+            break
+        time.sleep(0.02)
     assert not job.work_dir.exists()
     assert (job.dir / "job.json").exists()
 

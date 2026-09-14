@@ -15,7 +15,7 @@ from app.ffmpeg import mux_audio, normalize_cfr, probe, target_resolution, valid
 
 # Progress lines printed by inference_cli.py / its ffmpeg writer. Kept tolerant on purpose.
 _WRITTEN_RE = re.compile(r"Written\s+(\d+)\s*/\s*(\d+)\s+frames", re.I)
-_BATCH_RE = re.compile(r"Upscaling batch\s+(\d+)\s*/\s*(\d+)", re.I)   # "[19:43:11] 🎬 Upscaling batch 80/165"
+_BATCH_RE = re.compile(r"(Upscaling|Decoding) batch\s+(\d+)\s*/\s*(\d+)", re.I)   # "🎬 Upscaling batch 80/165"
 _CHUNK_RE = re.compile(r"Chunk\s+(\d+)\s*/\s*(\d+)", re.I)
 _PCT_RE = re.compile(r"(\d{1,3})%\|")            # tqdm style "45%|####"
 _FRAC_RE = re.compile(r"\b(\d+)/(\d+)\b")
@@ -27,13 +27,16 @@ def parse_progress(line: str) -> Optional[float]:
     if any(tag in line for tag in _IGNORE):
         return None
     m = _WRITTEN_RE.search(line)
-    if m:
+    if m:  # final ffmpeg write-out: last 5 %
         done, total = int(m.group(1)), int(m.group(2))
-        return done / total if total > 0 else None
+        return 0.95 + 0.05 * done / total if total > 0 else None
     m = _BATCH_RE.search(line)
-    if m:
-        idx, total = int(m.group(1)), int(m.group(2))
-        return (idx - 1) / total if total > 0 and idx >= 1 else None
+    if m:  # two passes over the same batches: upscaling (first half), VAE decoding (second half)
+        phase, idx, total = m.group(1).lower(), int(m.group(2)), int(m.group(3))
+        if total <= 0 or idx < 1:
+            return None
+        frac = (idx - 1) / total * 0.475
+        return frac if phase == "upscaling" else 0.475 + frac
     m = _CHUNK_RE.search(line)
     if m:
         idx, total = int(m.group(1)), int(m.group(2))
@@ -59,7 +62,7 @@ class SeedVR2Engine:
                "--dit_model", str(opts.get("dit_model", config.SEEDVR2_DEFAULT_DIT)),
                "--model_dir", str(config.SEEDVR2_MODELS_DIR),
                "--color_correction", str(opts.get("color_correction", "lab")),
-               "--temporal_overlap", str(int(opts.get("temporal_overlap", 3))),
+               "--temporal_overlap", str(int(opts.get("temporal_overlap", 1))),
                "--video_backend", "ffmpeg",
                "--attention_mode", str(opts.get("attention_mode", "sdpa")),
                "--cuda_device", "0"]
@@ -67,7 +70,7 @@ class SeedVR2Engine:
         if seed < 0:
             seed = int(time.time()) % 2_000_000_000
         cmd += ["--seed", str(seed)]
-        if opts.get("vae_decode_tiled", True):
+        if opts.get("vae_decode_tiled", False):
             cmd += ["--vae_decode_tiled"]
         chunk = int(opts.get("chunk_size", 0))
         if chunk > 0:

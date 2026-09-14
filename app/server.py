@@ -303,15 +303,15 @@ with gr.Blocks(title="Video Enhancer") as demo:
             engine_radio = gr.Radio(list(ENGINE_LABELS.values()), value=ENGINE_LABELS["seedvr2"], label="Engine")
             with gr.Group(visible=True) as seed_group:
                 dit_model = gr.Dropdown(config.SEEDVR2_DIT_MODELS, value=config.SEEDVR2_DEFAULT_DIT, label="SeedVR2 model")
-                batch_size = gr.Dropdown(config.SEEDVR2_BATCH_SIZES, value=5, label="Batch size (frames; higher = more temporal consistency, more VRAM)")
+                batch_size = gr.Dropdown(config.SEEDVR2_BATCH_SIZES, value=9, label="Batch size (frames; higher = more temporal consistency, more VRAM)")
                 color = gr.Dropdown(config.SEEDVR2_COLOR_MODES, value="lab", label="Color correction")
                 seed = gr.Number(value=42, label="Seed (-1 = random)", precision=0)
                 with gr.Accordion("Advanced (memory)", open=False):
-                    temporal_overlap = gr.Slider(0, 8, value=3, step=1, label="Temporal overlap between batches")
+                    temporal_overlap = gr.Slider(0, 8, value=1, step=1, label="Temporal overlap between batches (each overlapped frame is computed twice)")
                     chunk_size = gr.Number(value=0, label="Chunk size (frames per pass; 0 = whole video). Set e.g. 200 for long clips or RAM errors", precision=0)
                     blocks_to_swap = gr.Slider(0, 36, value=0, step=1, label="Blocks to swap to CPU (0 = off; use 16-32 on OOM)")
                     offload = gr.Checkbox(value=False, label="Offload DiT/VAE to CPU between steps")
-                    vae_tiled = gr.Checkbox(value=True, label="Tiled VAE decode (saves VRAM)")
+                    vae_tiled = gr.Checkbox(value=False, label="Tiled VAE decode (slower; only if decoding runs out of VRAM)")
             with gr.Group(visible=False) as fast_group:
                 upscaler = gr.Dropdown(list(config.FAST_UPSCALERS), value="RealESRGAN_x4plus", label="Upscaler")
                 face_restore = gr.Checkbox(value=True, label="Restore faces")
