@@ -38,15 +38,29 @@ app = FastAPI(title="enhance")
 demo: Optional[gr.Blocks] = None  # set below; needed by the auth dependency
 
 
+gradio_app = None  # the mounted gradio App (holds the login token table); set in main()
+
+
+def _find_gradio_app(root: FastAPI):
+    """mount_gradio_app does not hand back the inner app, so locate it among the mounted routes."""
+    from gradio.routes import App as GradioApp
+    for route in root.routes:
+        sub = getattr(route, "app", None)
+        if isinstance(sub, GradioApp):
+            return sub
+    return None
+
+
 def require_auth(request: Request) -> None:
-    """When ENHANCE_AUTH is set, accept only requests carrying a valid Gradio login cookie."""
+    """When ENHANCE_AUTH is set, accept only requests carrying a valid Gradio login cookie.
+    Gradio 6 names the cookie access-token-<cookie_id> (or access-token-unsecure-<cookie_id>)."""
     if not config.AUTH:
         return
-    server_app = getattr(demo, "server_app", None)
-    tokens = getattr(server_app, "tokens", {}) or {}
-    cookie = request.cookies.get("access-token") or request.cookies.get("access-token-unsecure")
-    if not cookie or cookie not in tokens:
-        raise HTTPException(401, "login required")
+    tokens = getattr(gradio_app, "tokens", None) or {}
+    for name, value in request.cookies.items():
+        if name.startswith("access-token") and value in tokens:
+            return
+    raise HTTPException(401, "login required")
 
 
 @app.post("/api/upload/init", dependencies=[Depends(require_auth)])
@@ -344,18 +358,30 @@ with gr.Blocks(title="Video Enhancer") as demo:
                outputs=[status_md, progress_html, log_box, result_video, download_html, history_df, view_state])
 
 
-def main() -> None:
-    global app
+def build_app() -> FastAPI:
+    """Mount the Gradio UI onto the FastAPI app and remember the inner Gradio app for auth checks."""
+    global app, gradio_app
     auth = None
     if config.AUTH and ":" in config.AUTH:
         user, pw = config.AUTH.split(":", 1)
         auth = (user, pw)
+    elif config.AUTH:
+        log.warning("ENHANCE_AUTH must look like user:pass; ignoring it")
     app = gr.mount_gradio_app(
         app, demo, path="/", auth=auth,
         allowed_paths=[str(config.OUTPUT_DIR)],
         max_file_size=config.SMALL_UPLOAD_LIMIT,
         css=CSS, head=HEAD, theme=gr.themes.Soft(),
     )
+    gradio_app = _find_gradio_app(app)
+    if auth and gradio_app is None:
+        raise RuntimeError("could not locate the mounted Gradio app; auth would lock out the API")
+    log.info("auth %s", "enabled" if auth else "disabled")
+    return app
+
+
+def main() -> None:
+    build_app()
     log.info("serving on 0.0.0.0:%d (workspace=%s)", config.SERVER_PORT, config.WORKSPACE)
     uvicorn.run(app, host="0.0.0.0", port=config.SERVER_PORT, timeout_keep_alive=120, log_level="info")
 
