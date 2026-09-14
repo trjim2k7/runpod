@@ -44,6 +44,16 @@ bash -c "[ -x /workspace/start.sh ] && nohup /workspace/start.sh >/workspace/app
 
 This keeps the template's own SSH/Jupyter start script and launches the UI in the background.
 
+### No spare HTTP port? Use a tunnel
+
+If the pod only exposes Jupyter's 8888 and you want to keep Jupyter, run the server on 7860 as usual and open a Cloudflare quick tunnel in a second terminal:
+
+```bash
+bash /workspace/enhance/tunnel.sh
+```
+
+It prints a public `https://<random>.trycloudflare.com` URL that goes straight to the enhancer. The URL changes each time the tunnel starts, and it is reachable by anyone who has it, so set `ENHANCE_AUTH` (below) first.
+
 ### Optional: password
 
 Set `ENHANCE_AUTH="user:pass"` in the pod's environment variables (or export it before `start.sh`). It protects both the UI and the upload/download API. Without it, anyone with the proxy URL can use the pod.
