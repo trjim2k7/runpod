@@ -9,6 +9,15 @@ export ENHANCE_WORKSPACE="$WORKSPACE"
 export PYTHONUNBUFFERED=1
 export GRADIO_ANALYTICS_ENABLED=0
 # ENHANCE_AUTH="user:pass" protects the UI + API; ENHANCE_PORT overrides 7860.
+# Pod env vars set in RunPod are not visible to SSH shells, so also read them from /workspace/.env
+# (lines like ENHANCE_AUTH=user:pass). Values already in the environment win.
+if [[ -f "$WORKSPACE/.env" ]]; then
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || continue
+    key="${line%%=*}"
+    [[ -z "${!key:-}" ]] && export "$line"
+  done < "$WORKSPACE/.env"
+fi
 
 # apt packages live on the ephemeral container disk; restore them after a pod reset.
 if ! command -v ffmpeg >/dev/null; then

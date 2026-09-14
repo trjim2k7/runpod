@@ -56,7 +56,7 @@ It prints a public `https://<random>.trycloudflare.com` URL that goes straight t
 
 ### Optional: password
 
-Set `ENHANCE_AUTH="user:pass"` in the pod's environment variables (or export it before `start.sh`). It protects both the UI and the upload/download API. Without it, anyone with the proxy URL can use the pod.
+Set `ENHANCE_AUTH="user:pass"` in the pod's environment variables, or put the line `ENHANCE_AUTH=user:pass` in `/workspace/.env` (SSH shells do not see RunPod env vars; `start.sh` reads this file). It protects both the UI and the upload/download API. Without it, anyone with the proxy URL can use the pod.
 
 ## 3. Daily use
 
