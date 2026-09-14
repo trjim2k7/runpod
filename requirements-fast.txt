@@ -1,0 +1,5 @@
+# torch/torchvision are installed first from the cu128 index by setup.sh
+spandrel==0.4.2
+spandrel_extra_arches
+opencv-python-headless
+numpy
